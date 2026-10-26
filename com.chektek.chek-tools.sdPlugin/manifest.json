@@ -1,0 +1,48 @@
+{
+	"Name": "Chek Tools",
+	"Version": "0.3.0.0",
+	"Author": "ChekTek",
+	"Actions": [
+		{
+			"Name": "Open Dashboard",
+			"UUID": "com.chektek.chek-tools.open-dashboard",
+			"Icon": "imgs/actions/dashboard/icon",
+			"Tooltip": "Opens the local work hub dashboard in your browser. Bookmarks for the dashboard are set here.",
+			"PropertyInspectorPath": "ui/open-dashboard.html",
+			"Controllers": ["Keypad"],
+			"States": [{ "Image": "imgs/actions/dashboard/key", "TitleAlignment": "bottom" }]
+		},
+		{
+			"Name": "Refresh",
+			"UUID": "com.chektek.chek-tools.refresh",
+			"Icon": "imgs/actions/refresh/icon",
+			"Tooltip": "Refreshes GitHub notifications, GitLab to-dos and Jira work items, and reviews PRs/MRs with Astra and Opus 5.5.",
+			"Controllers": ["Keypad"],
+			"States": [{ "Image": "imgs/actions/refresh/key", "TitleAlignment": "middle" }]
+		}
+	],
+	"Category": "Chek Tools",
+	"CategoryIcon": "imgs/plugin/category-icon",
+	"CodePath": "bin/plugin.js",
+	"Description": "Personal work hub: a local dashboard fed by GitHub, GitLab, Jira and AI code reviews.",
+	"Icon": "imgs/plugin/marketplace",
+	"SDKVersion": 3,
+	"Software": {
+		"MinimumVersion": "7.1"
+	},
+	"OS": [
+		{
+			"Platform": "mac",
+			"MinimumVersion": "12"
+		},
+		{
+			"Platform": "windows",
+			"MinimumVersion": "10"
+		}
+	],
+	"Nodejs": {
+		"Version": "26",
+		"Debug": "enabled"
+	},
+	"UUID": "com.chektek.chek-tools"
+}

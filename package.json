@@ -1,0 +1,25 @@
+{
+    "scripts": {
+        "build": "rollup -c",
+        "watch": "rollup -c -w --watch.onEnd=\"streamdeck restart com.chektek.chek-tools\""
+    },
+    "type": "module",
+    "engines": {
+        "node": "26.x"
+    },
+    "devDependencies": {
+        "@elgato/cli": "^1.10.3",
+        "@rollup/plugin-commonjs": "^29.0.2",
+        "@rollup/plugin-node-resolve": "^15.2.2",
+        "@rollup/plugin-terser": "^1.0.0",
+        "@rollup/plugin-typescript": "^12.1.0",
+        "@tsconfig/node26": "^26.0.1",
+        "@types/node": "~26.6.5",
+        "rollup": "^4.0.2",
+        "tslib": "^2.6.2",
+        "typescript": "^6.0.3"
+    },
+    "dependencies": {
+        "@elgato/streamdeck": "^3.0.3"
+    }
+}

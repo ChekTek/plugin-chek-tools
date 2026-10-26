@@ -1,0 +1,259 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Work Hub</title>
+<style>
+	/* Zed "One Dark" palette, matching the editor and terminal. */
+	:root {
+		--bg: #282c33; --panel: #2f343e; --panel-2: #363c46; --border: #3b414d;
+		--text: #dce0e5; --muted: #878e98; --link: #74ade8;
+		--ok: #a1c181; --warn: #dec184; --bad: #d07277; --info: #74ade8; --nit: #878e98; --purple: #b477cf; --cyan: #6eb4bf;
+		--github: #dce0e5; --gitlab: #d07277; --jira: #74ade8;
+	}
+	* { box-sizing: border-box; }
+	body { margin: 0; background: var(--bg); color: var(--text); font: 13px/1.55 ui-monospace, "JetBrains Mono", "SF Mono", Menlo, monospace; }
+	a { color: var(--link); text-decoration: none; }
+	a:hover { text-decoration: underline; }
+	header { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 16px; padding: 14px 24px; border-bottom: 1px solid var(--border); position: sticky; top: 0; background: var(--bg); z-index: 1; }
+	header h1 { font-size: 15px; margin: 0; flex: 1; white-space: nowrap; }
+	#refresh { display: flex; align-items: center; gap: 10px; color: var(--muted); font-size: 12px; }
+	#refresh-btn { display: inline-flex; align-items: center; justify-content: center; width: 30px; height: 30px; padding: 0; background: var(--panel-2); color: var(--text); border: 1px solid var(--border); border-radius: 6px; cursor: pointer; }
+	#refresh-btn svg { width: 22px; height: 22px; fill: currentColor; }
+	#refresh-btn:hover { border-color: var(--link); }
+	#refresh-btn:disabled { opacity: .5; cursor: default; }
+	.job-error { color: var(--bad); font-size: 12px; margin-bottom: 10px; white-space: pre-wrap; }
+	/* One column by default; two columns from about 2/3 of an ultrawide, three at full width. */
+	main { padding: 20px 24px 60px; display: grid; grid-template-columns: 1fr; gap: 28px; align-items: start; }
+	section:empty { display: none; }
+	#bookmarks { grid-column: 1 / -1; }
+	@media (min-width: 1500px) {
+		main { grid-template-columns: 1fr 1fr; }
+		#jira { grid-column: 1 / -1; }
+	}
+	@media (min-width: 2600px) {
+		main { grid-template-columns: 0.8fr 1fr 1fr; }
+		#jira { grid-column: auto; }
+	}
+	section h2 { font-size: 13px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); margin: 0 0 10px; display: flex; align-items: center; gap: 8px; }
+	section h2 .count { background: var(--panel-2); color: var(--text); border-radius: 10px; padding: 0 8px; font-size: 12px; letter-spacing: 0; }
+	.empty { color: var(--muted); font-style: italic; }
+	.card { background: var(--panel); border: 1px solid var(--border); border-radius: 10px; padding: 14px 16px; margin-bottom: 12px; }
+	.card-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 8px 12px; }
+	.card-head .title { font-weight: 600; font-size: 15px; }
+	.meta { color: var(--muted); font-size: 12px; }
+	.meta a { color: var(--muted); }
+	.tag { display: inline-block; font-size: 11px; padding: 1px 7px; border-radius: 9px; background: var(--panel-2); color: var(--muted); }
+	.tag.draft { color: var(--warn); }
+	.card-head .title { color: var(--purple); }
+	.reviews { display: grid; grid-template-columns: repeat(auto-fit, minmax(380px, 1fr)); gap: 12px; margin-top: 12px; }
+	.review { background: var(--panel-2); border-radius: 8px; padding: 12px; }
+	.review-head { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; }
+	.review-head .model { font-weight: 600; }
+	.verdict { font-size: 11px; padding: 1px 8px; border-radius: 9px; font-weight: 600; text-transform: uppercase; letter-spacing: .04em; }
+	.verdict.approve { background: rgba(161, 193, 129, .18); color: var(--ok); }
+	.verdict.request_changes { background: rgba(208, 114, 119, .18); color: var(--bad); }
+	.verdict.comment { background: rgba(222, 193, 132, .18); color: var(--warn); }
+	.verdict.running { background: rgba(116, 173, 232, .18); color: var(--info); }
+	.verdict.error { background: rgba(208, 114, 119, .18); color: var(--bad); }
+	.summary { white-space: pre-wrap; margin: 4px 0 8px; }
+	.finding { border-top: 1px solid var(--border); padding: 8px 0; }
+	.finding .where { font-size: 12px; }
+	.finding .where a { color: var(--cyan); }
+	.finding .ftitle { font-weight: 600; }
+	.finding .body { color: var(--muted); white-space: pre-wrap; }
+	.sev { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 6px; vertical-align: middle; }
+	.sev.high { background: var(--bad); } .sev.medium { background: var(--warn); } .sev.low { background: var(--info); } .sev.nit { background: var(--nit); }
+	.error-text { color: var(--bad); white-space: pre-wrap; font-size: 12px; }
+	ul.plain { list-style: none; margin: 0; padding: 0; }
+	ul.plain li { padding: 8px 0; border-bottom: 1px solid var(--border); display: flex; flex-wrap: wrap; gap: 6px 12px; align-items: baseline; }
+	ul.plain li:last-child { border-bottom: 0; }
+	.key { color: var(--cyan); }
+	.platform { font-weight: 700; }
+	a.platform:hover { text-decoration: underline; }
+	.platform.github { color: var(--github); } .platform.gitlab { color: var(--gitlab); } .platform.jira { color: var(--jira); }
+	.hint { color: var(--muted); font-size: 12px; margin-top: 4px; }
+	.card.change { position: relative; }
+	.card.change .card-head { padding-right: 130px; }
+	.toggle { position: absolute; top: 12px; right: 14px; background: var(--panel-2); color: var(--muted); border: 1px solid var(--border); border-radius: 6px; padding: 2px 10px; font: inherit; font-size: 12px; cursor: pointer; }
+	.toggle:hover { color: var(--text); border-color: var(--link); }
+	.verdicts { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 12px; margin-top: 10px; font-size: 12px; color: var(--muted); }
+	.bookmarks { display: flex; flex-wrap: wrap; gap: 8px; }
+	.bookmark { display: inline-block; background: var(--panel); border: 1px solid var(--border); border-radius: 8px; padding: 6px 12px; color: var(--text); }
+	.bookmark:hover { border-color: var(--link); text-decoration: none; }
+</style>
+</head>
+<body>
+<header>
+	<h1>Work Hub</h1>
+	<div id="refresh"><span id="refresh-text"></span><button id="refresh-btn" type="button" title="Refresh" aria-label="Refresh"><svg viewBox="0 0 24 24"><path d="M17.65 6.35C16.2 4.9 14.21 4 12 4c-4.42 0-7.99 3.58-7.99 8s3.57 8 7.99 8c3.73 0 6.84-2.55 7.73-6h-2.08c-.82 2.33-3.04 4-5.65 4-3.31 0-6-2.69-6-6s2.69-6 6-6c1.66 0 3.14.69 4.22 1.78L13 11h7V4l-2.35 2.35z"/></svg></button></div>
+</header>
+<main>
+	<section id="bookmarks"></section>
+	<section id="jira"></section>
+	<section id="github"></section>
+	<section id="gitlab"></section>
+</main>
+<script>
+// Where each section header links to.
+const HEADER_LINKS = {
+	github: "https://github.com/notifications",
+	gitlab: "https://gitlab.com/dashboard/home"
+};
+const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+const when = (iso) => iso ? new Date(iso).toLocaleString([], { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" }) : "";
+
+let connected = false;
+
+function renderRefresh(state) {
+	const running = Object.values(state.jobs).some((j) => j.status === "running");
+	const last = state.lastRefresh;
+	const text = running ? `Refreshing… started ${when(last?.startedAt)}` : last ? `Last refresh ${when(last.startedAt)}` : "Not refreshed yet";
+	document.getElementById("refresh-text").textContent = connected ? text : `${text} · reconnecting`;
+	document.getElementById("refresh-btn").disabled = running || !connected;
+}
+
+document.getElementById("refresh-btn").addEventListener("click", async () => {
+	const btn = document.getElementById("refresh-btn");
+	btn.disabled = true;
+	try {
+		const res = await fetch("/api/refresh", { method: "POST" });
+		if (!res.ok) throw new Error(`HTTP ${res.status}`);
+	} catch (err) {
+		document.getElementById("refresh-text").textContent = `Refresh failed: ${err.message}`;
+		btn.disabled = false;
+	}
+});
+
+/** A failed source explains itself inside its own section. */
+function jobError(job) {
+	return job.status === "error" ? `<div class="job-error">${esc(job.message ?? "Failed")}</div>` : "";
+}
+
+function renderBookmarks(bookmarks) {
+	const el = document.getElementById("bookmarks");
+	if (!bookmarks.length) { el.innerHTML = ""; return; }
+	el.innerHTML = `
+		<h2>Bookmarks</h2>
+		<div class="bookmarks">${bookmarks.map((b) => `<a class="bookmark" href="${esc(b.url)}" target="_blank" rel="noopener">${esc(b.name)}</a>`).join("")}</div>`;
+}
+
+function renderJira(jira) {
+	const el = document.getElementById("jira");
+	let heading = '<span class="platform jira">Jira</span>';
+	if (jira.boardUrl) {
+		heading = `<a class="platform jira" href="${esc(jira.boardUrl)}" target="_blank" rel="noopener">Jira</a>`;
+	}
+	const rows = jira.tickets.map((t) => `
+		<li>
+			<a class="key" href="${esc(t.url)}" target="_blank">${esc(t.key)}</a>
+			<span>${esc(t.summary)}</span>
+			<span class="tag">${esc(t.status)}</span>
+			<span class="meta">${esc(t.type)}${t.priority ? ` · ${esc(t.priority)}` : ""}</span>
+		</li>`).join("");
+	el.innerHTML = `
+		<h2>${heading} in progress <span class="count">${jira.tickets.length}</span></h2>
+		${jobError(lastState.jobs.jira)}
+		<div class="card">${rows ? `<ul class="plain">${rows}</ul>` : `<div class="empty">Nothing yet. Press the Refresh key on the Stream Deck.</div>`}</div>`;
+}
+
+function renderReview(r) {
+	const head = `<div class="review-head"><span class="model">${esc(r.label)}</span>
+		<span class="verdict ${esc(r.status === "done" ? r.verdict : r.status)}">${esc(r.status === "done" ? r.verdict.replace("_", " ") : r.status)}</span>
+		<span class="meta">${when(r.finishedAt || r.startedAt)}</span></div>`;
+	if (r.status === "running") return `<div class="review">${head}<div class="hint">Reviewing…</div></div>`;
+	if (r.status === "error") return `<div class="review">${head}<div class="error-text">${esc(r.error)}</div></div>`;
+	const findings = (r.findings ?? []).map((f) => `
+		<div class="finding">
+			<div><span class="sev ${esc(f.severity)}"></span><span class="ftitle">${esc(f.title)}</span></div>
+			<div class="where">${f.url ? `<a href="${esc(f.url)}" target="_blank">${esc(f.file)}${f.line ? `:${f.line}` : ""}</a>` : esc(f.file)}</div>
+			<div class="body">${esc(f.body)}</div>
+		</div>`).join("");
+	return `<div class="review">${head}<div class="summary">${esc(r.summary)}</div>${findings || `<div class="hint">No line-level findings.</div>`}</div>`;
+}
+
+// Reviews are collapsed by default; expanded PR/MR cards are remembered per browser.
+let expanded = new Set();
+try { expanded = new Set(JSON.parse(localStorage.getItem("expanded") ?? "[]")); } catch {}
+let lastState = null;
+
+function toggleCollapsed(id) {
+	if (expanded.has(id)) expanded.delete(id); else expanded.add(id);
+	try { localStorage.setItem("expanded", JSON.stringify([...expanded])); } catch {}
+	if (lastState) render(lastState);
+}
+
+function verdictChip(r) {
+	const v = r.status === "done" ? r.verdict : r.status;
+	const count = r.status === "done" && r.findings?.length ? ` (${r.findings.length})` : "";
+	return `<span>${esc(r.label)} <span class="verdict ${esc(v)}">${esc(v.replace("_", " "))}</span>${count}</span>`;
+}
+
+function renderChange(c) {
+	const isCollapsed = !expanded.has(c.id);
+	const toggle = `<button class="toggle" data-toggle="${esc(c.id)}" aria-expanded="${!isCollapsed}">${isCollapsed ? "▸ Show reviews" : "▾ Hide reviews"}</button>`;
+	const stats = c.additions != null ? `<span class="meta" style="color:var(--ok)">+${c.additions}</span> <span class="meta" style="color:var(--bad)">−${c.deletions}</span>` : "";
+	const files = c.changedFiles != null ? `<a class="meta" href="${esc(c.filesUrl)}" target="_blank">${c.changedFiles} files</a>` : `<a class="meta" href="${esc(c.filesUrl)}" target="_blank">files</a>`;
+	return `<div class="card change">
+		${toggle}
+		<div class="card-head">
+			<a class="title" href="${esc(c.url)}" target="_blank">${esc(c.title)}</a>
+			${c.draft ? `<span class="tag draft">draft</span>` : ""}
+			<span class="tag">${esc(c.reason.replace(/_/g, " "))}</span>
+			<span class="meta">${esc(c.repo)} ${c.platform === "github" ? "#" : "!"}${c.number} · ${esc(c.author)} · ${when(c.updatedAt)}</span>
+			${stats} ${files}
+			<span class="meta key">${esc(c.headSha.slice(0, 7))}</span>
+		</div>
+		${isCollapsed
+			? `<div class="verdicts">${c.reviews.length ? c.reviews.map(verdictChip).join("") : `<span>Queued for review.</span>`}</div>`
+			: `<div class="reviews">${c.reviews.length ? c.reviews.map(renderReview).join("") : `<div class="hint">Queued for review.</div>`}</div>`}
+	</div>`;
+}
+
+function renderNotifications(list) {
+	if (!list.length) return "";
+	return `<div class="card"><ul class="plain">${list.map((n) => `
+		<li>
+			<a href="${esc(n.url)}" target="_blank">${esc(n.title)}</a>
+			<span class="tag">${esc(n.type)}</span>
+			<span class="tag">${esc(n.reason.replace(/_/g, " "))}</span>
+			<span class="meta">${esc(n.repo)} · ${when(n.updatedAt)}</span>
+		</li>`).join("")}</ul></div>`;
+}
+
+function renderPlatform(name, label, data, emptyHint) {
+	const el = document.getElementById(name);
+	const total = data.changes.length + data.notifications.length;
+	el.innerHTML = `
+		<h2><a class="platform ${name}" href="${HEADER_LINKS[name]}" target="_blank" rel="noopener">${label}</a> <span class="count">${total}</span></h2>
+		${jobError(lastState.jobs[name])}
+		${data.changes.map(renderChange).join("")}
+		${renderNotifications(data.notifications)}
+		${total ? "" : `<div class="card"><div class="empty">${emptyHint}</div></div>`}`;
+}
+
+function render(state) {
+	lastState = state;
+	renderRefresh(state);
+	renderBookmarks(state.bookmarks ?? []);
+	renderJira(state.jira);
+	renderPlatform("github", "GitHub", state.github, "No notifications. Press the Refresh key on the Stream Deck.");
+	renderPlatform("gitlab", "GitLab", state.gitlab, "No to-dos. Press the Refresh key on the Stream Deck.");
+}
+
+document.querySelector("main").addEventListener("click", (e) => {
+	const id = e.target.closest("[data-toggle]")?.dataset.toggle;
+	if (id) toggleCollapsed(id);
+});
+
+function connect() {
+	const es = new EventSource("/api/events");
+	es.onopen = () => { connected = true; if (lastState) renderRefresh(lastState); };
+	es.onmessage = (e) => render(JSON.parse(e.data));
+	es.onerror = () => { connected = false; if (lastState) renderRefresh(lastState); es.close(); setTimeout(connect, 3000); };
+}
+connect();
+</script>
+</body>
+</html>

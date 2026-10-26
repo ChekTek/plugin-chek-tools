@@ -1,0 +1,113 @@
+<!DOCTYPE html>
+<html>
+
+<head lang="en">
+    <title>Open Dashboard</title>
+    <meta charset="utf-8" />
+    <script src="https://sdpi-components.dev/releases/v4/sdpi-components.js"></script>
+    <style>
+        .chips { display: flex; flex-wrap: wrap; gap: 4px; margin-bottom: 6px; }
+        .chip {
+            display: inline-flex; align-items: center; gap: 4px; max-width: 100%;
+            background: var(--input-bg-color, #3d3d3d); color: var(--input-font-color, #d8d8d8);
+            border-radius: 10px; padding: 2px 4px 2px 8px; font-size: var(--font-size, 9pt); font-family: var(--font-family, sans-serif);
+        }
+        .chip span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .chip button {
+            border: 0; background: transparent; color: #969696; cursor: pointer; font-size: 11px; line-height: 1;
+            width: 16px; height: 16px; border-radius: 8px; padding: 0;
+        }
+        .chip button:hover { background: #646464; color: #fff; }
+        .add { display: grid; grid-template-columns: 1fr auto; gap: 4px; }
+        .add input {
+            min-width: 0; background: var(--input-bg-color, #3d3d3d); color: var(--input-font-color, #d8d8d8);
+            border: 1px solid transparent; border-radius: 4px; padding: 4px 6px; font-size: var(--font-size, 9pt); font-family: var(--font-family, sans-serif);
+        }
+        .add input:focus { outline: 0; border-color: #77f; }
+        .add button {
+            background: #636363; color: #d8d8d8; border: 0; border-radius: 4px; padding: 0 10px; cursor: pointer; font-size: var(--font-size, 9pt);
+        }
+        .add button:hover { background: #777; }
+        .help { color: #969696; font-size: 8pt; margin-top: 4px; }
+    </style>
+</head>
+
+<body>
+    <sdpi-item label="Bookmarks">
+        <div>
+            <div class="chips" id="chips"></div>
+            <div class="add">
+                <input id="name" type="text" placeholder="Name (optional)" />
+                <span></span>
+                <input id="url" type="text" placeholder="https://example.com" />
+                <button id="add" type="button">Add</button>
+            </div>
+            <div class="help">Enter adds. Without a name the site's host is used. Click × to remove.</div>
+        </div>
+    </sdpi-item>
+
+    <script>
+        const client = SDPIComponents.streamDeckClient;
+        let settings = {};
+
+        // Bookmarks are dashboard-wide, so they live in the plugin's global settings.
+        async function load() {
+            settings = await client.getGlobalSettings();
+            settings.bookmarks ??= [];
+            render();
+        }
+
+        function render() {
+            const chips = document.getElementById("chips");
+            chips.replaceChildren(...settings.bookmarks.map((b, i) => {
+                const chip = document.createElement("div");
+                chip.className = "chip";
+                chip.title = b.url;
+                const label = document.createElement("span");
+                label.textContent = b.name;
+                const remove = document.createElement("button");
+                remove.type = "button";
+                remove.textContent = "×";
+                remove.title = "Remove";
+                remove.onclick = () => {
+                    settings.bookmarks.splice(i, 1);
+                    save();
+                };
+                chip.append(label, remove);
+                return chip;
+            }));
+        }
+
+        function save() {
+            client.setGlobalSettings(settings);
+            render();
+        }
+
+        /** Adds the typed bookmark. Without a name, the URL's host is used. */
+        function add() {
+            const nameInput = document.getElementById("name");
+            const urlInput = document.getElementById("url");
+            let url = urlInput.value.trim();
+            if (!url) return;
+            // Prepend a scheme when the user typed a bare host.
+            if (!/^https?:\/\//i.test(url)) url = `https://${url}`;
+            let name = nameInput.value.trim();
+            if (!name) {
+                try { name = new URL(url).host; } catch { return; }
+            }
+            settings.bookmarks.push({ name, url });
+            nameInput.value = "";
+            urlInput.value = "";
+            nameInput.focus();
+            save();
+        }
+
+        document.getElementById("add").onclick = add;
+        for (const id of ["name", "url"]) {
+            document.getElementById(id).addEventListener("keydown", (e) => { if (e.key === "Enter") add(); });
+        }
+        load();
+    </script>
+</body>
+
+</html>
