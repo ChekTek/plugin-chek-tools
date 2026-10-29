@@ -38,6 +38,8 @@
 	}
 	section h2 { font-size: 13px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); margin: 0 0 10px; display: flex; align-items: center; gap: 8px; }
 	section h2 .count { background: var(--panel-2); color: var(--text); border-radius: 10px; padding: 0 8px; font-size: 12px; letter-spacing: 0; }
+	section h3 { font-size: 12px; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); margin: 18px 0 8px; }
+	section h3 a { color: var(--muted); }
 	.empty { color: var(--muted); font-style: italic; }
 	.card { background: var(--panel); border: 1px solid var(--border); border-radius: 10px; padding: 14px 16px; margin-bottom: 12px; }
 	.card-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 8px 12px; }
@@ -57,6 +59,10 @@
 	.verdict.comment { background: rgba(222, 193, 132, .18); color: var(--warn); }
 	.verdict.running { background: rgba(116, 173, 232, .18); color: var(--info); }
 	.verdict.error { background: rgba(208, 114, 119, .18); color: var(--bad); }
+	.verdict.cancelled, .verdict.queued { background: var(--panel); color: var(--muted); }
+	.cancel { margin-left: auto; background: transparent; color: var(--muted); border: 1px solid var(--border); border-radius: 6px; padding: 2px 10px; font: inherit; font-size: 12px; cursor: pointer; }
+	.cancel:hover { color: var(--bad); border-color: var(--bad); }
+	.card-foot { display: flex; justify-content: flex-end; margin-top: 10px; }
 	.summary { white-space: pre-wrap; margin: 4px 0 8px; }
 	.finding { border-top: 1px solid var(--border); padding: 8px 0; }
 	.finding .where { font-size: 12px; }
@@ -76,6 +82,7 @@
 	.hint { color: var(--muted); font-size: 12px; margin-top: 4px; }
 	.card.change { position: relative; }
 	.card.change .card-head { padding-right: 130px; }
+	.card.change.mine .card-head { padding-right: 0; }
 	.toggle { position: absolute; top: 12px; right: 14px; background: var(--panel-2); color: var(--muted); border: 1px solid var(--border); border-radius: 6px; padding: 2px 10px; font: inherit; font-size: 12px; cursor: pointer; }
 	.toggle:hover { color: var(--text); border-color: var(--link); }
 	.verdicts { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 12px; margin-top: 10px; font-size: 12px; color: var(--muted); }
@@ -100,6 +107,10 @@
 const HEADER_LINKS = {
 	github: "https://github.com/notifications",
 	gitlab: "https://gitlab.com/dashboard/home"
+};
+const MINE_LINKS = {
+	github: "https://github.com/pulls",
+	gitlab: "https://gitlab.com/dashboard/merge_requests?scope=all&state=opened&author_username=ChekTek"
 };
 const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 const when = (iso) => iso ? new Date(iso).toLocaleString([], { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" }) : "";
@@ -162,8 +173,10 @@ function renderReview(r) {
 	const head = `<div class="review-head"><span class="model">${esc(r.label)}</span>
 		<span class="verdict ${esc(r.status === "done" ? r.verdict : r.status)}">${esc(r.status === "done" ? r.verdict.replace("_", " ") : r.status)}</span>
 		<span class="meta">${when(r.finishedAt || r.startedAt)}</span></div>`;
+	if (r.status === "queued") return `<div class="review">${head}<div class="hint">Waiting for its turn…</div></div>`;
 	if (r.status === "running") return `<div class="review">${head}<div class="hint">Reviewing…</div></div>`;
 	if (r.status === "error") return `<div class="review">${head}<div class="error-text">${esc(r.error)}</div></div>`;
+	if (r.status === "cancelled") return `<div class="review">${head}<div class="hint">Cancelled. Runs again on the next refresh.</div></div>`;
 	const findings = (r.findings ?? []).map((f) => `
 		<div class="finding">
 			<div><span class="sev ${esc(f.severity)}"></span><span class="ftitle">${esc(f.title)}</span></div>
@@ -190,24 +203,32 @@ function verdictChip(r) {
 	return `<span>${esc(r.label)} <span class="verdict ${esc(v)}">${esc(v.replace("_", " "))}</span>${count}</span>`;
 }
 
+/** A change is cancellable while any model is queued or still running. */
+function cancellable(c) {
+	return c.reviews.some((r) => r.status === "queued" || r.status === "running");
+}
+
 function renderChange(c) {
+	// My own PRs/MRs are not reviewed by the models, so they get no review UI.
+	const reviewed = c.kind !== "mine";
 	const isCollapsed = !expanded.has(c.id);
-	const toggle = `<button class="toggle" data-toggle="${esc(c.id)}" aria-expanded="${!isCollapsed}">${isCollapsed ? "▸ Show reviews" : "▾ Hide reviews"}</button>`;
+	const cancel = reviewed && cancellable(c) ? `<button class="cancel" data-cancel="${esc(c.id)}">Cancel review</button>` : "";
+	const toggle = reviewed ? `<button class="toggle" data-toggle="${esc(c.id)}" aria-expanded="${!isCollapsed}">${isCollapsed ? "▸ Show reviews" : "▾ Hide reviews"}</button>` : "";
 	const stats = c.additions != null ? `<span class="meta" style="color:var(--ok)">+${c.additions}</span> <span class="meta" style="color:var(--bad)">−${c.deletions}</span>` : "";
 	const files = c.changedFiles != null ? `<a class="meta" href="${esc(c.filesUrl)}" target="_blank">${c.changedFiles} files</a>` : `<a class="meta" href="${esc(c.filesUrl)}" target="_blank">files</a>`;
-	return `<div class="card change">
+	return `<div class="card change${reviewed ? "" : " mine"}">
 		${toggle}
 		<div class="card-head">
 			<a class="title" href="${esc(c.url)}" target="_blank">${esc(c.title)}</a>
 			${c.draft ? `<span class="tag draft">draft</span>` : ""}
-			<span class="tag">${esc(c.reason.replace(/_/g, " "))}</span>
+			${c.kind === "mine" ? (c.status ? `<span class="tag">${esc(c.status)}</span>` : "") : `<span class="tag">${esc(c.reason.replace(/_/g, " "))}</span>`}
 			<span class="meta">${esc(c.repo)} ${c.platform === "github" ? "#" : "!"}${c.number} · ${esc(c.author)} · ${when(c.updatedAt)}</span>
 			${stats} ${files}
 			<span class="meta key">${esc(c.headSha.slice(0, 7))}</span>
 		</div>
-		${isCollapsed
-			? `<div class="verdicts">${c.reviews.length ? c.reviews.map(verdictChip).join("") : `<span>Queued for review.</span>`}</div>`
-			: `<div class="reviews">${c.reviews.length ? c.reviews.map(renderReview).join("") : `<div class="hint">Queued for review.</div>`}</div>`}
+		${!reviewed ? "" : isCollapsed
+			? `<div class="verdicts">${c.reviews.length ? c.reviews.map(verdictChip).join("") : `<span>Not reviewed.</span>`}${cancel}</div>`
+			: `<div class="reviews">${c.reviews.length ? c.reviews.map(renderReview).join("") : `<div class="hint">Not reviewed.</div>`}</div>${cancel ? `<div class="card-foot">${cancel}</div>` : ""}`}
 	</div>`;
 }
 
@@ -224,13 +245,16 @@ function renderNotifications(list) {
 
 function renderPlatform(name, label, data, emptyHint) {
 	const el = document.getElementById(name);
-	const total = data.changes.length + data.notifications.length;
+	const toReview = data.changes.filter((c) => c.kind !== "mine");
+	const mine = data.changes.filter((c) => c.kind === "mine");
+	const total = toReview.length + data.notifications.length;
 	el.innerHTML = `
 		<h2><a class="platform ${name}" href="${HEADER_LINKS[name]}" target="_blank" rel="noopener">${label}</a> <span class="count">${total}</span></h2>
 		${jobError(lastState.jobs[name])}
-		${data.changes.map(renderChange).join("")}
+		${toReview.map(renderChange).join("")}
 		${renderNotifications(data.notifications)}
-		${total ? "" : `<div class="card"><div class="empty">${emptyHint}</div></div>`}`;
+		${total ? "" : `<div class="card"><div class="empty">${emptyHint}</div></div>`}
+		${mine.length ? `<h3><a href="${MINE_LINKS[name]}" target="_blank" rel="noopener">My open ${name === "github" ? "PRs" : "MRs"}</a> <span class="count">${mine.length}</span></h3>${mine.map(renderChange).join("")}` : ""}`;
 }
 
 function render(state) {
@@ -242,9 +266,14 @@ function render(state) {
 	renderPlatform("gitlab", "GitLab", state.gitlab, "No to-dos. Press the Refresh key on the Stream Deck.");
 }
 
-document.querySelector("main").addEventListener("click", (e) => {
+document.querySelector("main").addEventListener("click", async (e) => {
 	const id = e.target.closest("[data-toggle]")?.dataset.toggle;
 	if (id) toggleCollapsed(id);
+	const cancelId = e.target.closest("[data-cancel]")?.dataset.cancel;
+	if (cancelId) {
+		e.target.closest("[data-cancel]").disabled = true;
+		try { await fetch(`/api/cancel?id=${encodeURIComponent(cancelId)}`, { method: "POST" }); } catch {}
+	}
 });
 
 function connect() {

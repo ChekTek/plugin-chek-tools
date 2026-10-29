@@ -13,11 +13,11 @@ Everything runs through CLIs that are already signed in on this machine. The plu
 
 Sources:
 
-- **GitHub**: unread notifications via `gh`. Each pull request is reviewed by Astra and then Opus 5.5 (both via pi and the Copilot subscription). Other notifications are listed with links.
-- **GitLab**: pending to-dos via `glab`, with the same review of merge requests.
+- **GitHub**: unread notifications, PRs where my review is requested or that are assigned to me, and my open PRs via `gh`. Each pull request from someone else is reviewed by Astra and then Opus 5.5 (both via pi and the Copilot subscription). My own PRs are listed without reviews. Other notifications are listed with links.
+- **GitLab**: pending to-dos, MRs where I am a reviewer, and my open MRs via `glab`, with the same review of merge requests.
 - **Jira**: your in-progress work items via `acli`. After a successful refresh, the Jira heading opens the board set by `BOARD_ID` in `src/services/jira-service.ts` on your authenticated site.
 
-Review findings link straight to the file and line on GitHub or GitLab. A pull request is only re-reviewed when its head commit changes. Merged or closed PRs, and PRs you already approved at their current head, are hidden.
+Reviews run after the refresh itself finishes, so the refresh indicator only covers fetching; each PR card shows its reviews as queued, running or done. Review findings link straight to the file and line on GitHub or GitLab. A pull request is only re-reviewed when its head commit changes. Merged or closed PRs, and PRs you already approved at their current head, are hidden.
 
 State is persisted at `~/.chek-tools/dashboard.json`, so the dashboard survives plugin restarts.
 
@@ -54,6 +54,6 @@ streamdeck restart com.chektek.chek-tools
 
 `pnpm watch` rebuilds and restarts the plugin on every change. Logs are in `com.chektek.chek-tools.sdPlugin/logs/`.
 
-Review models are set in `src/services/review-service.ts`. The dashboard port is set in `src/lib/server.ts`.
+Review models are set in `src/services/review-service.ts`. The review instructions come from pi's `code-review` skill at `~/.pi/agent/skills/code-review/SKILL.md`; the dashboard only appends the JSON output shape. Reviews run without tools or a checkout, so the skill's advice to read surrounding code does not apply. The dashboard port is set in `src/lib/server.ts`.
 
 Key and action icons are [Material Icons](https://fonts.google.com/icons) (Apache 2.0), stored as plain SVG under `imgs/actions/`.

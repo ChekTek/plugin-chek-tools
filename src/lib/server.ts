@@ -6,6 +6,7 @@ import { fileURLToPath } from "node:url";
 
 import store from "../plugin-store";
 import refreshService from "../services/refresh-service";
+import reviewService from "../services/review-service";
 
 /** Fixed local port the dashboard is served on. */
 export const DASHBOARD_PORT = 48616;
@@ -47,6 +48,14 @@ export function startDashboardServer(): void {
 			// Fire and forget: progress reaches the page through the event stream.
 			refreshService.refreshAll();
 			res.writeHead(202);
+			res.end();
+			return;
+		}
+
+		if (url.pathname === "/api/cancel" && req.method === "POST") {
+			const id = url.searchParams.get("id");
+			if (id) reviewService.cancel(id);
+			res.writeHead(id ? 202 : 400);
 			res.end();
 			return;
 		}

@@ -19,7 +19,7 @@ export type Finding = {
 export type Review = {
 	model: string;
 	label: string;
-	status: "running" | "done" | "error";
+	status: "queued" | "running" | "done" | "error" | "cancelled";
 	startedAt: string;
 	finishedAt?: string;
 	verdict?: "approve" | "request_changes" | "comment";
@@ -28,10 +28,13 @@ export type Review = {
 	error?: string;
 };
 
-/** A pull request (GitHub) or merge request (GitLab) that needs attention. */
+/** A pull request (GitHub) or merge request (GitLab): one waiting on my review, or one I opened. */
 export type ChangeRequest = {
 	id: string;
 	platform: "github" | "gitlab";
+	kind: "review" | "mine";
+	/** Platform status for my own PRs, e.g. "approved" or "changes requested". */
+	status?: string;
 	repo: string;
 	number: number;
 	title: string;
@@ -113,6 +116,8 @@ function load(): DashboardState {
 				if (job.status === "running") job.status = "idle";
 			}
 			for (const cr of [...state.github.changes, ...state.gitlab.changes]) {
+				// Queued reviews never started, so the next refresh queues them again.
+				cr.reviews = cr.reviews.filter((r) => r.status !== "queued");
 				for (const r of cr.reviews) {
 					if (r.status === "running") {
 						r.status = "error";
@@ -143,23 +148,32 @@ class PluginStore extends EventEmitter {
 		this.emit("change", this.state);
 	}
 
-	/** Mark a review slot on a change request as running and return it. */
-	startReview(platform: "github" | "gitlab", id: string, model: string, label: string): void {
+	/** Replaces a change request's reviews with a queued slot per model. */
+	queueReviews(cr: ChangeRequest, models: readonly { model: string; label: string }[]): void {
 		this.update((s) => {
-			const cr = s[platform].changes.find((c) => c.id === id);
-			if (!cr) return;
-			cr.reviews = cr.reviews.filter((r) => r.model !== model);
-			cr.reviews.push({ model, label, status: "running", startedAt: new Date().toISOString() });
+			const current = this.find(s, cr);
+			if (current) current.reviews = models.map(({ model, label }) => ({ model, label, status: "queued", startedAt: new Date().toISOString() }));
 		});
 	}
 
-	finishReview(platform: "github" | "gitlab", id: string, model: string, result: ModelReview | Error): void {
+	/** Marks a model's review slot on a change request as running. */
+	startReview(cr: ChangeRequest, model: string, label: string): void {
 		this.update((s) => {
-			const cr = s[platform].changes.find((c) => c.id === id);
-			const review = cr?.reviews.find((r) => r.model === model);
+			const current = this.find(s, cr);
+			if (!current) return;
+			current.reviews = current.reviews.filter((r) => r.model !== model);
+			current.reviews.push({ model, label, status: "running", startedAt: new Date().toISOString() });
+		});
+	}
+
+	finishReview(cr: ChangeRequest, model: string, result: ModelReview | Error | "cancelled"): void {
+		this.update((s) => {
+			const review = this.find(s, cr)?.reviews.find((r) => r.model === model);
 			if (!review) return;
 			review.finishedAt = new Date().toISOString();
-			if (result instanceof Error) {
+			if (result === "cancelled") {
+				review.status = "cancelled";
+			} else if (result instanceof Error) {
 				review.status = "error";
 				review.error = result.message;
 			} else {
@@ -169,6 +183,12 @@ class PluginStore extends EventEmitter {
 				review.findings = result.findings;
 			}
 		});
+	}
+
+	/** The stored change request, as long as it still has the head the caller reviewed. */
+	private find(s: DashboardState, cr: ChangeRequest): ChangeRequest | undefined {
+		const current = s[cr.platform].changes.find((c) => c.id === cr.id);
+		return current?.headSha === cr.headSha ? current : undefined;
 	}
 
 	setJob(name: keyof DashboardState["jobs"], job: Partial<Job>): void {

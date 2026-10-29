@@ -4,12 +4,17 @@ import store, { type DashboardState } from "../plugin-store";
 import githubService from "./github-service";
 import gitlabService from "./gitlab-service";
 import jiraService from "./jira-service";
+import reviewService, { type ReviewJob } from "./review-service";
 
 /** Refreshes GitHub, GitLab and Jira at once. Shared by the Refresh key, the dashboard button and the deep link. */
 class RefreshService {
 	private running = false;
 
-	/** Runs all sources; resolves to whether every one succeeded. A run already in progress is reused. */
+	/**
+	 * Runs all sources; resolves to whether every one succeeded. A run already in progress is
+	 * reused. The AI reviews the sources queue carry on after this resolves, each change
+	 * showing its own progress on the dashboard.
+	 */
 	async refreshAll(): Promise<boolean> {
 		if (this.running) return false;
 		this.running = true;
@@ -17,10 +22,15 @@ class RefreshService {
 			s.lastRefresh = { startedAt: new Date().toISOString() };
 		});
 
+		const jobs: ReviewJob[] = [];
 		try {
 			const results = await Promise.all([
-				this.runJob("github", () => githubService.refresh()),
-				this.runJob("gitlab", () => gitlabService.refresh()),
+				this.runJob("github", async () => {
+					jobs.push(...(await githubService.refresh()));
+				}),
+				this.runJob("gitlab", async () => {
+					jobs.push(...(await gitlabService.refresh()));
+				}),
 				this.runJob("jira", () => jiraService.refresh())
 			]);
 			return results.every(Boolean);
@@ -29,6 +39,7 @@ class RefreshService {
 			store.update((s) => {
 				if (s.lastRefresh) s.lastRefresh.finishedAt = new Date().toISOString();
 			});
+			reviewService.reviewAll(jobs);
 		}
 	}
 

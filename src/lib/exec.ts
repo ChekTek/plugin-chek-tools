@@ -28,6 +28,14 @@ export const PATH = buildPath();
 
 export type RunResult = { stdout: string; stderr: string };
 
+/** Thrown when a command was stopped through its abort signal. */
+export class CancelledError extends Error {
+	constructor() {
+		super("Cancelled");
+		this.name = "CancelledError";
+	}
+}
+
 /**
  * Runs a command with the augmented PATH and returns its output. Rejects with the
  * stderr text when the command exits non-zero or exceeds the timeout.
@@ -36,7 +44,7 @@ export type RunResult = { stdout: string; stderr: string };
  * is one of Node's socket-pair pipes, but behaves normally writing to a file. Stdin is
  * closed unless input is given, so tools never wait on an empty pipe.
  */
-export function run(cmd: string, args: string[], opts: { cwd?: string; timeoutMs?: number; input?: string } = {}): Promise<RunResult> {
+export function run(cmd: string, args: string[], opts: { cwd?: string; timeoutMs?: number; input?: string; signal?: AbortSignal } = {}): Promise<RunResult> {
 	return new Promise((resolve, reject) => {
 		const dir = mkdtempSync(join(tmpdir(), "chek-run-"));
 		const outPath = join(dir, "stdout");
@@ -62,13 +70,22 @@ export function run(cmd: string, args: string[], opts: { cwd?: string; timeoutMs
 			stdio: [opts.input === undefined ? "ignore" : "pipe", out, err],
 			timeout: opts.timeoutMs ?? 10 * 60 * 1000
 		});
+		const onAbort = (): void => {
+			child.kill("SIGTERM");
+		};
+		opts.signal?.addEventListener("abort", onAbort, { once: true });
+
 		child.on("error", (e) => {
+			opts.signal?.removeEventListener("abort", onAbort);
 			if (finish()) reject(new Error(`${cmd} failed to start: ${e.message}`));
 		});
 		child.on("close", (code, signal) => {
+			opts.signal?.removeEventListener("abort", onAbort);
 			const result = finish();
 			if (!result) return;
-			if (code === 0) {
+			if (opts.signal?.aborted) {
+				reject(new CancelledError());
+			} else if (code === 0) {
 				resolve(result);
 			} else {
 				const why = signal ? `killed by ${signal}, probably the timeout` : `exit ${code}`;
