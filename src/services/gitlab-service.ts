@@ -13,9 +13,11 @@ class GitLabService {
 	/** Refreshes the store and returns the review jobs for MRs that still need one. */
 	async refresh(): Promise<ReviewJob[]> {
 		store.setJob("gitlab", { message: "Fetching to-dos and MRs" });
-		const [todos, me, mine] = await Promise.all([
+		// One glab call runs alone first so it renews an expired OAuth token by itself. GitLab
+		// refresh tokens are single-use, so parallel processes racing to refresh fail with invalid_grant.
+		const me = await this.login();
+		const [todos, mine] = await Promise.all([
 			this.allPages<GlTodo>("todos?state=pending"),
-			this.login(),
 			this.allPages<GlMr>("merge_requests?scope=created_by_me&state=opened")
 		]);
 		const requested = await this.allPages<GlMr>(`merge_requests?scope=all&state=opened&reviewer_username=${me}`);
