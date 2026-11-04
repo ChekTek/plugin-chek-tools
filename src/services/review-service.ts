@@ -1,6 +1,6 @@
 import streamDeck from "@elgato/streamdeck";
-import { existsSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
-import { homedir, tmpdir } from "node:os";
+import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
 import { join } from "node:path";
 
 import { mapLimit } from "../lib/concurrency";
@@ -35,23 +35,28 @@ export type ReviewInput = {
 	link: (file: string, line: number | null) => string;
 };
 
-/** pi's code-review skill supplies the review instructions; the dashboard only adds the output shape. */
-const SKILL_PATH = join(homedir(), ".pi", "agent", "skills", "code-review", "SKILL.md");
+const BASE_PROMPT = `You are reviewing a pull request. You have no tools and no repository checkout: the attached
+unified diff is the whole target, so review what it shows. Look for:
 
-const BASE_PROMPT = `You are reviewing a pull request. Follow the code review instructions below.
-You have no tools and no repository checkout: the attached unified diff is the whole target, so review what it shows.`;
+- Bugs: realistic failures; give the trigger and impact.
+- Simplification: less branching, state, duplication, or abstraction.
+- Human readability: clearer names, flow, and intent; not style preferences.
+- Reduction: code or dependencies that can be safely removed.
+- Other: security, performance, compatibility, tests, and docs.
+
+Verify each finding against the diff; no speculation or unrelated cleanup. Be terse: fragments over sentences.`;
 
 const OUTPUT_FORMAT = `Output format: respond with ONLY a JSON object (no markdown fences, no prose) in this exact shape:
 {
   "verdict": "approve" | "request_changes" | "comment",
-  "summary": "2-4 sentences on what the change does and your overall take",
+  "summary": "under one sentence: what the change does and your take",
   "findings": [
     {
       "severity": "high" | "medium" | "low" | "nit",
       "file": "path/to/file exactly as it appears after +++ in the diff (without the b/ prefix)",
       "line": <line number in the NEW version of the file, or null if not line-specific>,
       "title": "short one-line headline",
-      "body": "1-3 sentences explaining the problem and a suggested fix"
+      "body": "one line on the problem, then one or two '- Fix:' bullet lines each proposing a solution"
     }
   ]
 }`;
@@ -204,7 +209,6 @@ class ReviewService {
 					model.model,
 					"--system-prompt",
 					BASE_PROMPT,
-					...(existsSync(SKILL_PATH) ? ["--append-system-prompt", SKILL_PATH] : []),
 					"--append-system-prompt",
 					OUTPUT_FORMAT,
 					`@${diffPath}`,

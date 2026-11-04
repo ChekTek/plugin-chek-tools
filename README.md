@@ -54,6 +54,6 @@ streamdeck restart com.chektek.chek-tools
 
 `pnpm watch` rebuilds and restarts the plugin on every change. Logs are in `com.chektek.chek-tools.sdPlugin/logs/`.
 
-Review models are set in `src/services/review-service.ts`. The review instructions come from pi's `code-review` skill at `~/.pi/agent/skills/code-review/SKILL.md`; the dashboard only appends the JSON output shape. Reviews run without tools or a checkout, so the skill's advice to read surrounding code does not apply. The dashboard port is set in `src/lib/server.ts`.
+Review models and the review prompt are set in `src/services/review-service.ts`. Reviews run without tools or a checkout, so the model sees only the diff. The dashboard port is set in `src/lib/server.ts`.
 
 Key and action icons are [Material Icons](https://fonts.google.com/icons) (Apache 2.0), stored as plain SVG under `imgs/actions/`.
